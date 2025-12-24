@@ -21,7 +21,7 @@ Notebooks fetch and execute `bootstrap.py` from GitHub:
 
 ```python
 import requests
-exec(requests.get("https://raw.githubusercontent.com/FarisHijazi/ai-pros/master/notebooks/telemetry/bootstrap.py").text)
+exec(requests.get("https://raw.githubusercontent.com/FarisHijazi/ipynb-telemetry/refs/heads/master/src/bootstrap.py").text)
 setup_telemetry("notebook_id")
 ```
 

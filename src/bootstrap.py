@@ -5,7 +5,7 @@ This script is designed to be fetched and executed from a raw GitHub URL.
 It sets up student tracking, cell execution tracking, and test result tracking.
 
 Usage in notebook:
-    import requests; exec(requests.get("https://raw.githubusercontent.com/FarisHijazi/ai-pros/master/notebooks/telemetry/bootstrap.py").text)
+    import requests; exec(requests.get("https://raw.githubusercontent.com/FarisHijazi/ipynb-telemetry/refs/heads/master/src/bootstrap.py").text)
     setup_telemetry("notebook_id")
 
 Or with custom config:
