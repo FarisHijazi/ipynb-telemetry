@@ -1,0 +1,67 @@
+# PostHog Self-Hosted Setup for Bootcamp Telemetry
+#
+# Usage:
+#   1. Clone PostHog: git clone https://github.com/PostHog/posthog.git
+#   2. cd posthog
+#   3. docker compose -f docker-compose.hobby.yml up -d
+#
+# Or use this simplified single-container setup for testing:
+#
+# This file provides a quick-start setup. For production, use PostHog's official docker-compose.
+
+services:
+  # Option 1: Use PostHog Cloud (recommended for simplicity)
+  # Just sign up at https://app.posthog.com and use the API key
+  #
+  # Option 2: Self-hosted PostHog (this file)
+
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: posthog
+      POSTGRES_PASSWORD: posthog
+      POSTGRES_DB: posthog
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posthog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  posthog:
+    image: posthog/posthog:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://posthog:posthog@postgres:5432/posthog
+      REDIS_URL: redis://redis:6379
+      SECRET_KEY: "${POSTHOG_SECRET_KEY:-replace-this-with-a-secure-random-string}"
+      SITE_URL: "${SITE_URL:-http://localhost:8000}"
+      IS_BEHIND_PROXY: "true"
+      DISABLE_SECURE_SSL_REDIRECT: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - posthog_data:/var/lib/posthog
+
+volumes:
+  postgres_data:
+  redis_data:
+  posthog_data:
+
+# Note: This is a simplified setup. For full features, use:
+# https://posthog.com/docs/self-host
