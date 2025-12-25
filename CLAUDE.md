@@ -6,26 +6,54 @@ Real-time student progress tracking for AI Pros Bootcamp notebooks.
 
 The telemetry system tracks student activity in Jupyter/Colab notebooks and sends events to PostHog for analytics.
 
-## Architecture
+## Installation
 
-The telemetry is split into two parts:
+```bash
+# Install from GitHub
+pip install git+https://github.com/FarisHijazi/ipynb-telemetry.git
 
-1. **`bootstrap.py`** - Standalone script hosted on GitHub, fetched and executed at runtime
-2. **`notebook_cells.py`** - Generator that creates the fetch-and-execute cell for notebooks
+# Or with uv
+uv pip install git+https://github.com/FarisHijazi/ipynb-telemetry.git
 
-This design allows updating telemetry logic without regenerating notebooks.
+# For development
+cd notebooks/telemetry
+uv pip install -e .
+```
 
-## Remote Bootstrap
+## Usage
 
-Notebooks fetch and execute `bootstrap.py` from GitHub:
+### In Notebooks
 
 ```python
-import requests
-exec(requests.get("https://raw.githubusercontent.com/FarisHijazi/ipynb-telemetry/refs/heads/master/src/bootstrap.py").text)
+from ipynb_telemetry import setup_telemetry
 setup_telemetry("notebook_id")
 ```
 
-### `setup_telemetry()` Arguments
+Or with custom config:
+
+```python
+setup_telemetry("notebook_id", host="...", api_key="...")
+```
+
+### For Notebook Generation
+
+```python
+from ipynb_telemetry.notebook_cells import get_telemetry_setup_cell
+
+# Generate cell code for a notebook
+cell_code = get_telemetry_setup_cell("D3_Datetimes")
+```
+
+## Package Structure
+
+```
+src/ipynb_telemetry/
+├── __init__.py          # Package exports
+├── bootstrap.py         # Core telemetry logic
+└── notebook_cells.py    # Cell code generators
+```
+
+## `setup_telemetry()` Arguments
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -35,7 +63,7 @@ setup_telemetry("notebook_id")
 | `skip_name_prompt` | bool | False | Skip interactive name input |
 | `student_name` | str | None | Pre-set name (requires skip_name_prompt) |
 
-### Injected Globals
+## Injected Globals
 
 After `setup_telemetry()` runs, these are available globally:
 
@@ -49,119 +77,29 @@ After `setup_telemetry()` runs, these are available globally:
 - **Host**: `https://us.i.posthog.com`
 - **API Key**: `phc_I7GaZ4p1Ox5PRM5egRrHFxz3ZCdh3zyKQ7B6jxJOWis`
 
-## Student Name Input
-
-Each notebook starts with a name input cell that:
-
-1. Prompts for **first name** and **last name**
-2. Validates **English characters only** (A-Z, a-z, spaces, hyphens)
-3. **Normalizes to UPPERCASE**
-4. Shows clear error if no name entered
-5. Stores as `STUDENT_ID` in format `FIRSTNAME_LASTNAME`
-
-```python
-import re
-
-first_name = input("Enter your FIRST NAME (English only): ").strip()
-last_name = input("Enter your LAST NAME (English only): ").strip()
-
-# Validation
-pattern = r'^[A-Za-z\s\-]+$'
-if not first_name or not last_name:
-    raise ValueError("ERROR: Both first and last name are required!")
-if not re.match(pattern, first_name) or not re.match(pattern, last_name):
-    raise ValueError("ERROR: Names must contain only English letters!")
-
-# Normalize to uppercase
-STUDENT_ID = f"{first_name.upper()}_{last_name.upper()}"
-print(f"Welcome, {STUDENT_ID}!")
-```
-
 ## Events Tracked
 
-### 1. Cell Execution (Every Cell)
+### 1. Session Start
 
-Uses IPython hooks to capture ALL cell executions:
+Sent when `setup_telemetry()` is called.
+
+### 2. Cell Execution
+
+Uses the `_cell()` function to track code cell runs:
 
 ```python
-from IPython import get_ipython
-
-def pre_run_cell(info):
-    # Capture cell code before execution
-    global _current_cell_code
-    _current_cell_code = info.raw_cell
-
-def post_run_cell(result):
-    # Send telemetry after execution
-    send_event("cell_executed", {
-        "code": _current_cell_code,
-        "output": str(result.result) if result.result else "",
-        "success": result.success,
-        "error": str(result.error_in_exec) if result.error_in_exec else None
-    })
-
-ip = get_ipython()
-ip.events.register('pre_run_cell', pre_run_cell)
-ip.events.register('post_run_cell', post_run_cell)
+_cell("exercise_1", "# code preview...")
 ```
 
-### 2. Test Results
+### 3. Test Results
 
 The `@tracked_test` decorator wraps exercise test functions:
 
 ```python
-def tracked_test(test_name):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            try:
-                result = func(*args, **kwargs)
-                send_event("test_passed", {"test": test_name})
-                print(f"TEST PASSED: {test_name}")
-                return result
-            except AssertionError as e:
-                send_event("test_failed", {"test": test_name, "error": str(e)})
-                print(f"TEST FAILED: {test_name} - {e}")
-                raise
-        return wrapper
-    return decorator
-```
-
-### 3. Solution Peeks
-
-When students expand a `<details>` solution block, it's tracked via JavaScript:
-
-```javascript
-document.querySelectorAll('details').forEach(el => {
-    el.addEventListener('toggle', () => {
-        if (el.open) {
-            // Send peek event to PostHog
-        }
-    });
-});
-```
-
-### 4. Focus/Blur Events
-
-Tracks when students switch away from the notebook:
-
-```javascript
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        // Send blur event
-    } else {
-        // Send focus event
-    }
-});
-```
-
-### 5. Paste Detection
-
-Detects when students paste code:
-
-```javascript
-document.addEventListener('paste', (e) => {
-    // Send paste event with pasted text length
-});
+@tracked_test("exercise_name")
+def test_exercise():
+    assert result == expected
+    print("Passed!")
 ```
 
 ## Event Payload Structure
@@ -170,38 +108,30 @@ All events include:
 
 ```python
 {
-    "student_id": STUDENT_ID,      # e.g., "JOHN_DOE"
-    "notebook": NOTEBOOK_NAME,      # e.g., "D1_Python_Tooling"
-    "timestamp": datetime.now().isoformat(),
-    "event_type": "...",           # cell_executed, test_passed, etc.
-    "properties": { ... }          # Event-specific data
+    "nb": "notebook_id",
+    "sess": "abc12345",
+    "student": "JOHN-DOE",
+    "v": "1.0.0",
+    # ... event-specific properties
 }
 ```
 
-## Collapsible Setup Cells
+## Environment Variables
 
-Telemetry code uses `#@title` for Colab collapsibility:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TELEMETRY_PACKAGE_NAME` | `ipynb-telemetry` | Package name |
+| `TELEMETRY_PACKAGE_SPEC` | GitHub URL | pip install spec |
 
-```python
-#@title Setup: Telemetry (Run this cell first)
-# ... telemetry code ...
+## Development
+
+```bash
+# Install dev dependencies
+uv pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Lint
+ruff check .
 ```
-
-This keeps the notebook clean while ensuring tracking runs.
-
-## Privacy Considerations
-
-- Only tracks learning progress, not personal data beyond name
-- Code and outputs are captured for educational analytics
-- No keystroke logging or screen recording
-- Students see their name displayed after input
-
-## Viewing Analytics
-
-Access PostHog dashboard to view:
-
-- Student progress through exercises
-- Common errors and failure points
-- Time spent on each notebook
-- Solution peek patterns
-- Engagement metrics (focus/blur)
