@@ -29,11 +29,11 @@ def get_telemetry_setup_cell(notebook_id: str) -> str:
     return f'''#@title Enter Your Name (REQUIRED)
 # Install telemetry package if needed
 try:
-    from ipynb_telemetry import setup_telemetry
+    from ipynb_telemetry.bootstrap import setup_telemetry
 except ImportError:
     import subprocess, sys
     subprocess.check_call([sys.executable, "-m", "pip", "install", "{PACKAGE_SPEC}", "-q"])
-    from ipynb_telemetry import setup_telemetry
+    from ipynb_telemetry.bootstrap import setup_telemetry
 
 setup_telemetry("{notebook_id}")
 '''

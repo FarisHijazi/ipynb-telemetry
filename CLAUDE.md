@@ -25,7 +25,7 @@ uv pip install -e .
 ### In Notebooks
 
 ```python
-from ipynb_telemetry import setup_telemetry
+from ipynb_telemetry.bootstrap import setup_telemetry
 setup_telemetry("notebook_id")
 ```
 
@@ -47,8 +47,8 @@ cell_code = get_telemetry_setup_cell("D3_Datetimes")
 ## Package Structure
 
 ```
-src/ipynb_telemetry/
-├── __init__.py          # Package exports
+ipynb_telemetry/
+├── __init__.py          # Empty (per project convention)
 ├── bootstrap.py         # Core telemetry logic
 └── notebook_cells.py    # Cell code generators
 ```
@@ -60,8 +60,6 @@ src/ipynb_telemetry/
 | `notebook_id` | str | required | Unique notebook identifier |
 | `host` | str | PostHog US | PostHog instance URL |
 | `api_key` | str | project key | PostHog API key |
-| `skip_name_prompt` | bool | False | Skip interactive name input |
-| `student_name` | str | None | Pre-set name (requires skip_name_prompt) |
 
 ## Injected Globals
 
